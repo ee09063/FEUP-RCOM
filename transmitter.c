@@ -1,7 +1,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-//#include <termios.h>
+#include <termios.h>
 #include <stdio.h>
 
 #define BAUDRATE B38400
@@ -9,31 +9,40 @@
 #define _POSIX_SOURCE 1
 #define FALSE 0
 #define TRUE 1
+
 #define ERROR -1
 #define OK 0
+
 #define CMDLENGTH 5
+
 #define	FLAG 0x7e
 
 typedef enum {
-	TTOR = 0x03, //Transmitter to Receptor
-	RTOT = 0x01 // Receptor to Transmitter
-} Destination;
+	TTOR = 0x03, // CMD -> T TO R | RESP -> R TO T
+	RTOT = 0x01 // CMD -> R TO T | RESP -> T TO R
+} AddrField;
 
 typedef enum {
-	NONE = 0x00,
 	SET = 0x03,
-	DISC = 0x0b,
+	DISC = 0x0b
+} CMDType;
+
+typedef enum {
 	UA = 0x07,
 	RR = 0x05,
 	REJ = 0x01
-} CMDType;
+} RESPType
+
+typedef enum {
+	CONNECT,
+	DISCONNECT
+} State;
 
 volatile int STOP = FALSE;
 
-//struct termios oldtio;
+struct termios oldtio;
 
-/*
-int open_port(char* serialPort, char** argv, int argc){
+int open_port(char** argv, int argc){
 	struct termios newtio;
 
 	int fd;
@@ -87,8 +96,7 @@ int close_port(int fd){
 
 	close(fd);
 }
-*/
-/*
+
 int send(char* buf, int lenght, int fd){
 	tcflush(fd, TCOFLUSH);
 
@@ -99,23 +107,52 @@ int send(char* buf, int lenght, int fd){
 	else
 		return ERROR;
 }
-*/
 
-char* makeCMDFrame(Destination dest, CMDType cmd){
-	char *buf = malloc(CMDLENGTH);
+char* makeCMDFrame(CMDType cmd){
+	char* buf = malloc(CMDLENGTH);
 
 	buf[0] = FLAG;
-	buf[1] = dest;
+	buf[1] = TTOR;
 	buf[2] = cmd;
-	buf[3] = cmd ^ dest;
+	buf[3] = cmd ^ TTOR;
 	buf[4] = FLAG;
 
 	return buf;
 }
 
+int readFrame(State state){
+	if(State == CONNECTION)
+}
+
+void llopen(char** argv, int argc){
+	int fd = open_port(argv, argc);
+	
+	if(fd < 0){
+		printf_s("ERROR OPENING PORT\n");
+		exit(ERROR);
+	}
+	
+	print_s("PORT OPEN\n");
+	
+	char* buf = makeCMDFrame(SET); // MAKE A SET COMMAND	
+	
+	printf_s("SENDING SET COMMAND...\n");
+	
+	if(send(buf, CMDLENGTH, fd) != OK){
+		print_s("ERROR SENDING SET COMMAND. WILL NOW EXIT\n");
+		exit(ERROR);
+	} else {
+		
+	}
+	
+	
+	
+	
+}
+
 int main(int argc, char** argv)
 {
-	char* buf = makeCMDFrame(TTOR, SET);
+	
 
 	if (buf){
 		for (int i = 0; i < CMDLENGTH; i++){
