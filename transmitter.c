@@ -120,8 +120,71 @@ char* makeCMDFrame(CMDType cmd){
 	return buf;
 }
 
+int checkRESP(RESPType cmd, char* resp){
+	
+}
+
 int readFrame(State state){
-	if(State == CONNECTION)
+	char c;
+	char buf[2];
+	
+	if(State == CONNECTION){ // SENT SET, WAITS FOR UA
+		tcflush(fd, TCIFLUSH);
+		int readState = 0;
+		char cmd[CMDLENGTH];
+		while(readState != 5){ // STATE MACHINE TO READ 5 FRAME INPUT
+			if(read(fd, buf, 1)){
+				c = buf[0];
+				switch(readState){
+					case 0:
+						if(c == FLAG){
+							cmd[0] = c;
+							readState = 1;
+						}
+						break;
+					case 1:
+						if(c = TTOR){
+							cmd[1] = c;
+						}
+						else if(c == FLAG){
+							readState = 1;
+						} else {
+							readState = 0;
+						}
+						break;
+					case 2:
+						if(c == FLAG){
+							readState = 1;
+						} else {
+							cmd[2] = c;
+							readState = 3;
+						}
+						break;
+					case 3:
+						if(c == FLAG){
+							readState = 1;
+						} else {
+							cmd[3] = c;
+							readState = 4;
+						}
+						break;
+					case 4:
+						if(c == FLAG){
+							cmd[4] == c;
+							readState = 5; // FINAL STATE
+						}
+						break;
+				}
+			}
+		}
+		/*READ 5 CHARACTERS, STARTING AND ENDEDING WITH FLAG, CHECK FOR ERRORS*/
+		if(checkRESP(UA, cmd)){ // EXPECTING UA RESPONSE
+			return OK;
+		} else {
+			print_s("ERROR CHECKING UA RESPONSE\n");
+			exit(ERROR);
+		}
+	}
 }
 
 void llopen(char** argv, int argc){
@@ -142,27 +205,18 @@ void llopen(char** argv, int argc){
 		print_s("ERROR SENDING SET COMMAND. WILL NOW EXIT\n");
 		exit(ERROR);
 	} else {
-		
+		if(readFrame(CONNECTION)){
+			print_s("CONNECTION ESTABLISHED\n");
+			return OK;
+		} else {
+			print_s("ERROR ESTABLISHING CONNECTION");
+			exit(ERROR);
+		}
 	}
-	
-	
-	
-	
+
 }
 
 int main(int argc, char** argv)
 {
-	
-
-	if (buf){
-		for (int i = 0; i < CMDLENGTH; i++){
-			printf_s("Position %d --> %x\n", i, buf[i]);
-		}
-	}
-	else{
-		printf_s("Error Creating Command");
-		exit(ERROR);
-	}
-
 	return OK;
 }
