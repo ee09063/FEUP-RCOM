@@ -23,14 +23,14 @@ typedef enum {
 } AddrField;
 
 typedef enum {
-	SET = 0x03,
+	SET = 0x07,
 	DISC = 0x0b
 } CMDType;
 
 typedef enum {
-	UA = 0x07,
-	RR = 0x05,
-	REJ = 0x01
+	UA = 0x03,
+	RR = 0x01,
+	REJ = 0x05
 } RESPType
 
 typedef enum {
@@ -39,6 +39,8 @@ typedef enum {
 } State;
 
 volatile int STOP = FALSE;
+
+State globalState;
 
 struct termios oldtio;
 
@@ -120,15 +122,54 @@ char* makeCMDFrame(CMDType cmd){
 	return buf;
 }
 
-int checkRESP(RESPType cmd, char* resp){
-	
+char* makeRESPFrame(RESPType resp){
+	char* buf = malloc(CMDLENGTH);
+
+	buf[0] = FLAG;
+	buf[1] = RTOT;
+	buf[2] = resp;
+	buf[3] = resp ^ RTOT;
+	buf[4] = FLAG;
+
+	return buf;
 }
 
-int readFrame(State state){
+int checkRESP(RESPType cmd, char* resp){
+	if(resp.lenght != CMDLENGTH){
+		printf_s("WRONG SIZE IN RESPONSE CHECKING\n");
+		exit(ERROR);
+	}
+	if(cmd == UA){
+		if(resp[0] != FLAG){
+			printf_s("ERROR CHEKING POSITION 0 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		if(resp[1] != RTOR){
+			printf_s("ERROR CHEKING POSITION 1 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		if(resp[2] != UA){
+			printf_s("ERROR CHEKING POSITION 2 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		if(resp[3] != (UA ^ RTOR))){
+			printf_s("ERROR CHEKING POSITION 3 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		if(resp[4] != FLAG){
+			printf_s("ERROR CHEKING POSITION 4 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		return OK;
+		}
+	}
+}
+
+int readFrame(int fd){
 	char c;
 	char buf[2];
 	
-	if(State == CONNECTION){ // SENT SET, WAITS FOR UA
+	if(globalState == CONNECTION){ // SENT SET, WAITS FOR UA
 		tcflush(fd, TCIFLUSH);
 		int readState = 0;
 		char cmd[CMDLENGTH];
@@ -143,7 +184,7 @@ int readFrame(State state){
 						}
 						break;
 					case 1:
-						if(c = TTOR){
+						if(c = RTOT){
 							cmd[1] = c;
 						}
 						else if(c == FLAG){
@@ -197,6 +238,8 @@ void llopen(char** argv, int argc){
 	
 	print_s("PORT OPEN\n");
 	
+	globalState = CONNECTION;
+
 	char* buf = makeCMDFrame(SET); // MAKE A SET COMMAND	
 	
 	printf_s("SENDING SET COMMAND...\n");
@@ -205,7 +248,7 @@ void llopen(char** argv, int argc){
 		print_s("ERROR SENDING SET COMMAND. WILL NOW EXIT\n");
 		exit(ERROR);
 	} else {
-		if(readFrame(CONNECTION)){
+		if(readFrame(fd)){ // SUCESSFULLY RECEIVED UA RESPONSE FROM RECEIVER
 			print_s("CONNECTION ESTABLISHED\n");
 			return OK;
 		} else {
@@ -218,5 +261,11 @@ void llopen(char** argv, int argc){
 
 int main(int argc, char** argv)
 {
+	char* buf = makeCMDFrame(SET);
+	if(checkCMD(SET, buf)){
+		printf_s("OK\n");
+	} else {
+		printf_s("NOK\n");
+	}
 	return OK;
 }

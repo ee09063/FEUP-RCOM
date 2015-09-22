@@ -1,7 +1,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-//#include <termios.h>
+#include <termios.h>
 #include <stdio.h>
 
 #define BAUDRATE B38400
@@ -9,31 +9,42 @@
 #define _POSIX_SOURCE 1
 #define FALSE 0
 #define TRUE 1
+
 #define ERROR -1
 #define OK 0
+
 #define CMDLENGTH 5
+
 #define	FLAG 0x7e
 
 typedef enum {
-	TTOR = 0x03, //Transmitter to Receptor
-	RTOT = 0x01 // Receptor to Transmitter
-} Destination;
+	TTOR = 0x03, // CMD -> T TO R | RESP -> R TO T
+	RTOT = 0x01 // CMD -> R TO T | RESP -> T TO R
+} AddrField;
 
 typedef enum {
-	NONE = 0x00,
-	SET = 0x03,
-	DISC = 0x0b,
-	UA = 0x07,
-	RR = 0x05,
-	REJ = 0x01
+	SET = 0x07,
+	DISC = 0x0b
 } CMDType;
+
+typedef enum {
+	UA = 0x03,
+	RR = 0x01,
+	REJ = 0x05
+} RESPType
+
+typedef enum {
+	CONNECT,
+	DISCONNECT
+} State;
 
 volatile int STOP = FALSE;
 
-//struct termios oldtio;
+State globalState;
 
-/*
-int open_port(char* serialPort, char** argv, int argc){
+struct termios oldtio;
+
+int open_port(char** argv, int argc){
 	struct termios newtio;
 
 	int fd;
@@ -87,8 +98,7 @@ int close_port(int fd){
 
 	close(fd);
 }
-*/
-/*
+
 int send(char* buf, int lenght, int fd){
 	tcflush(fd, TCOFLUSH);
 
@@ -99,33 +109,156 @@ int send(char* buf, int lenght, int fd){
 	else
 		return ERROR;
 }
-*/
 
-char* makeCMDFrame(Destination dest, CMDType cmd){
-	char *buf = malloc(CMDLENGTH);
+char* makeCMDFrame(CMDType cmd){
+	char* buf = malloc(CMDLENGTH);
 
 	buf[0] = FLAG;
-	buf[1] = dest;
+	buf[1] = TTOR;
 	buf[2] = cmd;
-	buf[3] = cmd ^ dest;
+	buf[3] = cmd ^ TTOR;
 	buf[4] = FLAG;
 
 	return buf;
 }
 
-int main(int argc, char** argv)
-{
-	char* buf = makeCMDFrame(TTOR, SET);
+char* makeRESPFrame(RESPType resp){
+	char* buf = malloc(CMDLENGTH);
 
-	if (buf){
-		for (int i = 0; i < CMDLENGTH; i++){
-			printf_s("Position %d --> %x\n", i, buf[i]);
-		}
-	}
-	else{
-		printf_s("Error Creating Command");
+	buf[0] = FLAG;
+	buf[1] = RTOT;
+	buf[2] = resp;
+	buf[3] = resp ^ RTOT;
+	buf[4] = FLAG;
+
+	return buf;
+}
+
+int checkCMD(CMDType command, char* cmd){
+	if(cmd.lenght != CMDLENGTH){
+		printf_s("WRONG SIZE IN COMMAND CHECKING\n");
 		exit(ERROR);
 	}
+	if(command == Set){
+		if(resp[0] != FLAG){
+			printf_s("ERROR CHEKING POSITION 0 IN SET RESPONSE\n");
+			exit(ERROR);
+		}
+		if(cmd[1] != TTOR){
+			printf_s("ERROR CHEKING POSITION 1 IN SET RESPONSE\n");
+			exit(ERROR);
+		}
+		if(cmd[2] != UA){
+			printf_s("ERROR CHEKING POSITION 2 IN SET RESPONSE\n");
+			exit(ERROR);
+		}
+		if(cmd[3] != (SET ^ TTOR))){
+			printf_s("ERROR CHEKING POSITION 3 IN SET RESPONSE\n");
+			exit(ERROR);
+		}
+		if(cmd[4] != FLAG){
+			printf_s("ERROR CHEKING POSITION 4 IN SET RESPONSE\n");
+			exit(ERROR);
+		}
+		return OK;
+		}
+	}
+}
 
+int readFrame(State state, int fd){
+	char c;
+	char buf[2];
+	
+	if(State == CONNECTION){ // WAITS FOR SET
+		tcflush(fd, TCIFLUSH);
+		int readState = 0;
+		char cmd[CMDLENGTH];
+		while(readState != 5){ // STATE MACHINE TO READ 5 FRAME INPUT
+			if(read(fd, buf, 1)){
+				c = buf[0];
+				switch(readState){
+					case 0:
+						if(c == FLAG){
+							cmd[0] = c;
+							readState = 1;
+						}
+						break;
+					case 1:
+						if(c = TTOR){
+							cmd[1] = c;
+						}
+						else if(c == FLAG){
+							readState = 1;
+						} else {
+							readState = 0;
+						}
+						break;
+					case 2:
+						if(c == FLAG){
+							readState = 1;
+						} else {
+							cmd[2] = c;
+							readState = 3;
+						}
+						break;
+					case 3:
+						if(c == FLAG){
+							readState = 1;
+						} else {
+							cmd[3] = c;
+							readState = 4;
+						}
+						break;
+					case 4:
+						if(c == FLAG){
+							cmd[4] == c;
+							readState = 5; // FINAL STATE
+						}
+						break;
+				}
+			}
+		}
+		/*READ 5 CHARACTERS, STARTING AND ENDEDING WITH FLAG, CHECK FOR ERRORS*/
+		if(checkCMD(SET, cmd)){ // EXPECTING UA RESPONSE
+			return OK;
+		} else {
+			print_s("ERROR CHECKING SET COMMAND\n");
+			exit(ERROR);
+		}
+	}
+}
+
+void llopen(char** argv, int argc){
+	int fd = open_port(argv, argc);
+	
+	if(fd < 0){
+		printf_s("ERROR OPENING PORT\n");
+		exit(ERROR);
+	}
+	
+	print_s("PORT OPEN\n");
+
+	globalState = CONNECTION;
+	
+	if(readFrame(SET)){
+		char* buf = makeRESPFrame(UA); // MAKE A UA RESPONSE	
+	
+		printf_s("SENDING UA RESPONSE...\n");
+		
+		if(send(buf, CMDLENGTH, fd) != OK){
+			print_s("ERROR SENDING UA RESPONSE. WILL NOW EXIT\n");
+			exit(ERROR);
+		}
+	}
+}
+
+int main(int argc, char** argv)
+{
+	char* buf = makeRESPFrame(UA);
+	if(checkRESP(UA, buf)){
+		printf_s("OK\n");
+	} else {
+		printf_s("NOK\n");
+	}
 	return OK;
 }
