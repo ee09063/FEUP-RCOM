@@ -1,8 +1,9 @@
-#include <sys/types.h>
+/*#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <termios.h>
+#include <termios.h>*/
 #include <stdio.h>
+#include <stdlib.h>
 
 #define BAUDRATE B38400
 #define MODEMDEVICE "/dev/ttyS1"
@@ -31,7 +32,7 @@ typedef enum {
 	UA = 0x03,
 	RR = 0x01,
 	REJ = 0x05
-} RESPType
+} RESPType;
 
 typedef enum {
 	CONNECT,
@@ -41,7 +42,7 @@ typedef enum {
 volatile int STOP = FALSE;
 
 State globalState;
-
+/*
 struct termios oldtio;
 
 int open_port(char** argv, int argc){
@@ -109,14 +110,14 @@ int send(char* buf, int lenght, int fd){
 	else
 		return ERROR;
 }
-
+*/
 char* makeCMDFrame(CMDType cmd){
 	char* buf = malloc(CMDLENGTH);
 
 	buf[0] = FLAG;
-	buf[1] = TTOR;
+	buf[1] = RTOT;
 	buf[2] = cmd;
-	buf[3] = cmd ^ TTOR;
+	buf[3] = cmd ^ RTOT;
 	buf[4] = FLAG;
 
 	return buf;
@@ -126,45 +127,104 @@ char* makeRESPFrame(RESPType resp){
 	char* buf = malloc(CMDLENGTH);
 
 	buf[0] = FLAG;
-	buf[1] = RTOT;
+	buf[1] = TTOR;
 	buf[2] = resp;
-	buf[3] = resp ^ RTOT;
+	buf[3] = resp ^ TTOR;
 	buf[4] = FLAG;
 
 	return buf;
 }
 
 int checkCMD(CMDType command, char* cmd){
-	if(cmd.lenght != CMDLENGTH){
-		printf_s("WRONG SIZE IN COMMAND CHECKING\n");
-		exit(ERROR);
-	}
-	if(command == Set){
-		if(resp[0] != FLAG){
-			printf_s("ERROR CHEKING POSITION 0 IN SET RESPONSE\n");
+	if(command == SET){
+		if(cmd[0] != FLAG){
+			printf("ERROR CHEKING POSITION 0 IN SET COMMAND\n");
 			exit(ERROR);
 		}
 		if(cmd[1] != TTOR){
-			printf_s("ERROR CHEKING POSITION 1 IN SET RESPONSE\n");
+			printf("ERROR CHEKING POSITION 1 IN SET COMMAND\n");
 			exit(ERROR);
 		}
-		if(cmd[2] != UA){
-			printf_s("ERROR CHEKING POSITION 2 IN SET RESPONSE\n");
+		if(cmd[2] != SET){
+			printf("ERROR CHEKING POSITION 2 IN SET COMMAND\n");
 			exit(ERROR);
 		}
-		if(cmd[3] != (SET ^ TTOR))){
-			printf_s("ERROR CHEKING POSITION 3 IN SET RESPONSE\n");
+		if(cmd[3] != (SET ^ TTOR)){
+			printf("ERROR CHEKING POSITION 3 IN SET COMMAND\n");
 			exit(ERROR);
 		}
 		if(cmd[4] != FLAG){
-			printf_s("ERROR CHEKING POSITION 4 IN SET RESPONSE\n");
+			printf("ERROR CHEKING POSITION 4 IN SET COMMAND\n");
 			exit(ERROR);
 		}
-		return OK;
+		if(cmd[5] == 0x00){
+			return OK;
+		} else {
+			printf("ERROR CHECKING LAST POSITION IN SET COMMAND\n");
+			exit(ERROR);
+		}
+	} else if(command == DISC){
+	    if(cmd[0] != FLAG){
+			printf("ERROR CHEKING POSITION 0 IN DISC COMMAND\n");
+			exit(ERROR);
+		}
+		if(cmd[1] != TTOR){
+			printf("ERROR CHEKING POSITION 1 IN DISC COMMAND\n");
+			exit(ERROR);
+		}
+		if(cmd[2] != DISC){
+			printf("ERROR CHEKING POSITION 2 IN DISC COMMAND\n");
+			exit(ERROR);
+		}
+		if(cmd[3] != (DISC ^ TTOR)){
+			printf("ERROR CHEKING POSITION 3 IN DISC COMMAND\n");
+			exit(ERROR);
+		}
+		if(cmd[4] != FLAG){
+			printf("ERROR CHEKING POSITION 4 IN DISC COMMAND\n");
+			exit(ERROR);
+		}
+		if(cmd[5] == 0x00){
+			return OK;
+		} else {
+			printf("ERROR CHECKING LAST POSITION IN DISC COMMAND\n");
+			exit(ERROR);
 		}
 	}
 }
 
+int checkRESP(RESPType cmd, char* resp){
+	if(cmd == UA){
+		if(resp[0] != FLAG){
+			printf("ERROR CHEKING POSITION 0 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		if(resp[1] != RTOT){
+			printf("ERROR CHEKING POSITION 1 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		if(resp[2] != UA){
+			printf("ERROR CHEKING POSITION 2 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		if(resp[3] != (UA ^ RTOT)){
+			printf("ERROR CHEKING POSITION 3 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		if(resp[4] != FLAG){
+			printf("ERROR CHEKING POSITION 4 IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+		if(resp[5] == 0x00){
+			return OK;
+		} else {
+			printf("ERROR CHECKING LAST POSITION IN UA RESPONSE\n");
+			exit(ERROR);
+		}
+	}
+}
+
+/*
 int readFrame(State state, int fd){
 	char c;
 	char buf[2];
@@ -218,11 +278,11 @@ int readFrame(State state, int fd){
 				}
 			}
 		}
-		/*READ 5 CHARACTERS, STARTING AND ENDEDING WITH FLAG, CHECK FOR ERRORS*/
+		//READ 5 CHARACTERS, STARTING AND ENDEDING WITH FLAG, CHECK FOR ERRORS
 		if(checkCMD(SET, cmd)){ // EXPECTING UA RESPONSE
 			return OK;
 		} else {
-			print_s("ERROR CHECKING SET COMMAND\n");
+			printf("ERROR CHECKING SET COMMAND\n");
 			exit(ERROR);
 		}
 	}
@@ -232,33 +292,27 @@ void llopen(char** argv, int argc){
 	int fd = open_port(argv, argc);
 	
 	if(fd < 0){
-		printf_s("ERROR OPENING PORT\n");
+		printf("ERROR OPENING PORT\n");
 		exit(ERROR);
 	}
 	
-	print_s("PORT OPEN\n");
+	printf("PORT OPEN\n");
 
 	globalState = CONNECTION;
 	
 	if(readFrame(SET)){
 		char* buf = makeRESPFrame(UA); // MAKE A UA RESPONSE	
 	
-		printf_s("SENDING UA RESPONSE...\n");
+		printf("SENDING UA RESPONSE...\n");
 		
 		if(send(buf, CMDLENGTH, fd) != OK){
-			print_s("ERROR SENDING UA RESPONSE. WILL NOW EXIT\n");
+			printf("ERROR SENDING UA RESPONSE. WILL NOW EXIT\n");
 			exit(ERROR);
 		}
 	}
 }
-
+*/
 int main(int argc, char** argv)
 {
-	char* buf = makeRESPFrame(UA);
-	if(checkRESP(UA, buf)){
-		printf_s("OK\n");
-	} else {
-		printf_s("NOK\n");
-	}
 	return OK;
 }
