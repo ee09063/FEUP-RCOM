@@ -1,9 +1,11 @@
-/*#include <sys/types.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <termios.h>*/
+#include <termios.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "alarm.h"
 
 #define BAUDRATE B38400
 #define MODEMDEVICE "/dev/ttyS1"
@@ -42,7 +44,7 @@ typedef enum {
 volatile int STOP = FALSE;
 
 State globalState;
-/*
+
 struct termios oldtio;
 
 int open_port(char** argv, int argc){
@@ -110,7 +112,7 @@ int send(char* buf, int lenght, int fd){
 	else
 		return ERROR;
 }
-*/
+
 char* makeCMDFrame(CMDType cmd){
 	char* buf = malloc(CMDLENGTH);
 
@@ -224,7 +226,6 @@ int checkRESP(RESPType cmd, char* resp){
 	}
 }
 
-/*
 int readFrame(State state, int fd){
 	char c;
 	char buf[2];
@@ -289,6 +290,9 @@ int readFrame(State state, int fd){
 }
 
 void llopen(char** argv, int argc){
+	alarmSetup();
+	alarm(0);
+	
 	int fd = open_port(argv, argc);
 	
 	if(fd < 0){
@@ -301,17 +305,17 @@ void llopen(char** argv, int argc){
 	globalState = CONNECTION;
 	
 	if(readFrame(SET)){
-		char* buf = makeRESPFrame(UA); // MAKE A UA RESPONSE	
+		char* uaRESP = makeRESPFrame(UA); // MAKE A UA RESPONSE	
 	
 		printf("SENDING UA RESPONSE...\n");
 		
-		if(send(buf, CMDLENGTH, fd) != OK){
+		if(send(uaRESP, CMDLENGTH, fd) != OK){
 			printf("ERROR SENDING UA RESPONSE. WILL NOW EXIT\n");
 			exit(ERROR);
 		}
 	}
 }
-*/
+
 int main(int argc, char** argv)
 {
 	return OK;

@@ -1,11 +1,17 @@
-/*#include <sys/types.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <termios.h>*/
+#include <termios.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "alarm.h"
+
 #define BAUDRATE B38400
+#define CMDLENGTH 5
+#define ATTEMPTS 3
+#define TIMEOUT 3
+
 #define MODEMDEVICE "/dev/ttyS1"
 #define _POSIX_SOURCE 1
 #define FALSE 0
@@ -14,7 +20,9 @@
 #define ERROR -1
 #define OK 0
 
-#define CMDLENGTH 5
+#define TRANSMITTER 1
+#define RECEIVER 0
+
 #define NELEMS(x)  (sizeof(x) / sizeof((x)[0]))
 
 #define	FLAG 0x7e
@@ -36,16 +44,17 @@ typedef enum {
 } RESPType;
 
 typedef enum {
-	CONNECT,
-	DISCONNECT
+	CONNECTION,
+	TERMINATION,
+	TRANSMISSION
 } State;
 
 volatile int STOP = FALSE;
 
 State globalState;
 
-//struct termios oldtio;
-/*
+struct termios oldtio;
+
 int open_port(char** argv, int argc){
 	struct termios newtio;
 
@@ -111,7 +120,7 @@ int send(char* buf, int lenght, int fd){
 	else
 		return ERROR;
 }
-*/
+
 char* makeCMDFrame(CMDType cmd){
 	char* buf = (char*)malloc(CMDLENGTH * sizeof(char));
 
@@ -193,71 +202,77 @@ int checkCMD(CMDType command, char* cmd){
 	}
 }
 
-/*
+
 int readFrame(int fd){
 	char c;
 	char buf[2];
 	
-	if(globalState == CONNECTION){ // SENT SET, WAITS FOR UA
-		tcflush(fd, TCIFLUSH);
-		int readState = 0;
-		char cmd[CMDLENGTH];
-		while(readState != 5){ // STATE MACHINE TO READ 5 FRAME INPUT
-			if(read(fd, buf, 1)){
-				c = buf[0];
-				switch(readState){
-					case 0:
-						if(c == FLAG){
-							cmd[0] = c;
-							readState = 1;
-						}
-						break;
-					case 1:
-						if(c = RTOT){
-							cmd[1] = c;
-						}
-						else if(c == FLAG){
-							readState = 1;
-						} else {
-							readState = 0;
-						}
-						break;
-					case 2:
-						if(c == FLAG){
-							readState = 1;
-						} else {
-							cmd[2] = c;
-							readState = 3;
-						}
-						break;
-					case 3:
-						if(c == FLAG){
-							readState = 1;
-						} else {
-							cmd[3] = c;
-							readState = 4;
-						}
-						break;
-					case 4:
-						if(c == FLAG){
-							cmd[4] == c;
-							readState = 5; // FINAL STATE
-						}
-						break;
+	while(!getAlarmFlag()){
+		if(globalState == CONNECTION){ // SENT SET, WAITS FOR UA
+			tcflush(fd, TCIFLUSH);
+			int readState = 0;
+			char cmd[CMDLENGTH];
+			while(readState != 5){ // STATE MACHINE TO READ 5 FRAME INPUT
+				if(read(fd, buf, 1)){
+					c = buf[0];
+					switch(readState){
+						case 0:
+							if(c == FLAG){
+								cmd[0] = c;
+								readState = 1;
+							}
+							break;
+						case 1:
+							if(c = RTOT){
+								cmd[1] = c;
+							}
+							else if(c == FLAG){
+								readState = 1;
+							} else {
+								readState = 0;
+							}
+							break;
+						case 2:
+							if(c == FLAG){
+								readState = 1;
+							} else {
+								cmd[2] = c;
+								readState = 3;
+							}
+							break;
+						case 3:
+							if(c == FLAG){
+								readState = 1;
+							} else {
+								cmd[3] = c;
+								readState = 4;
+							}
+							break;
+						case 4:
+							if(c == FLAG){
+								cmd[4] == c;
+								readState = 5; // FINAL STATE
+							}
+							break;
+					}
 				}
 			}
-		}
-		//READ 5 CHARACTERS, STARTING AND ENDEDING WITH FLAG, CHECK FOR ERRORS
-		if(checkRESP(UA, cmd)){ // EXPECTING UA RESPONSE
-			return OK;
-		} else {
-			printf("ERROR CHECKING UA RESPONSE\n");
-			exit(ERROR);
+			//READ 5 CHARACTERS, STARTING AND ENDEDING WITH FLAG, CHECK FOR ERRORS
+			if(checkRESP(UA, cmd)){ // EXPECTING UA RESPONSE
+				return OK;
+			} else {
+				printf("ERROR CHECKING UA RESPONSE\n");
+				exit(ERROR);
+			}
 		}
 	}
+	return ERROR;
 }
 
 void llopen(char** argv, int argc){
+	alarmSetup();
+	alarm(0);
+	
 	int fd = open_port(argv, argc);
 	
 	if(fd < 0){
@@ -269,25 +284,31 @@ void llopen(char** argv, int argc){
 	
 	globalState = CONNECTION;
 
-	char* buf = makeCMDFrame(SET); // MAKE A SET COMMAND	
+	char* setCMD = makeCMDFrame(SET); // MAKE A SET COMMAND	
 	
-	printf("SENDING SET COMMAND...\n");
+	int tries = 0;
 	
-	if(send(buf, CMDLENGTH, fd) != OK){
-		printf("ERROR SENDING SET COMMAND. WILL NOW EXIT\n");
-		exit(ERROR);
-	} else {
-		if(readFrame(fd)){ // SUCESSFULLY RECEIVED UA RESPONSE FROM RECEIVER
-			printf("CONNECTION ESTABLISHED\n");
-			return OK;
-		} else {
-			printf("ERROR ESTABLISHING CONNECTION");
+	while(tries < ATTEMPTS) && globalState == CONNECTION){
+		printf("SENDING SET COMMAND...\n");
+		if(send(setCMD, CMDLENGTH, fd) != OK){
+			printf("ERROR SENDING SET COMMAND. WILL NOW EXIT\n");
 			exit(ERROR);
+		} else {
+			setAlarmFlag(0);
+			alarm(TIMEOUT);
+			if(readFrame(fd)){ // SUCESSFULLY RECEIVED UA RESPONSE FROM RECEIVER
+				printf("CONNECTION ESTABLISHED\n");
+				globalState = TRANSMISSION;
+				break;
+			} else {
+				printf("ERROR ESTABLISHING CONNECTION");
+				exit(ERROR);
+			}
 		}
 	}
 
 }
-*/
+
 int main(int argc, char** argv)
 {
 	char* buf = makeCMDFrame(SET);

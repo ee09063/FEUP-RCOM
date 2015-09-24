@@ -111,8 +111,6 @@ typedef struct {
 	int length;
 } command;
 
-
-
 static link_layer ll;
 static Statistics stats;
 
